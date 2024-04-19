@@ -1,0 +1,19 @@
+[package]
+name = "audio-example"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1"
+chrono = "0.4"
+log = "0.4"
+spectrum-analyzer = "1.5"
+ffmpeg-next = { version = "7", features = ["default"] }
+ffmpeg-sys-next = { version = "7", features = ["default"] }
+sdl2 = "0.36"
+cpal = "0.15"
+log-panics = { version = "2", features = ["with-backtrace"] }
+tracing = "0.1"
+tracing-subscriber = "0.3"
+tracing-appender = "0.2"
+crossbeam = "0.8"
