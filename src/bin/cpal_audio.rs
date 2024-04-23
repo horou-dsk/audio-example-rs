@@ -6,6 +6,7 @@ use cpal::{
 use crossbeam::channel::Sender;
 use ffmpeg::{format, media};
 use ffmpeg_next::{self as ffmpeg, ChannelLayout};
+use ffmpeg_sys_next::{av_seek_frame, AVSEEK_FLAG_BACKWARD};
 
 type AudioFormatT = i16;
 
@@ -68,6 +69,7 @@ fn init_ffmpeg(tx: Sender<Vec<AudioFormatT>>, rate: u32) -> Result<(), ffmpeg::E
         log::error!("请传入音频文件参数");
         std::process::exit(1);
     };
+    let volume = args.next().map(|vol| vol.parse().unwrap()).unwrap_or(0.5);
     let mut input_context = ffmpeg::format::input(&music)?;
     let audio_input = input_context
         .streams()
@@ -77,6 +79,19 @@ fn init_ffmpeg(tx: Sender<Vec<AudioFormatT>>, rate: u32) -> Result<(), ffmpeg::E
     let context_decoder =
         ffmpeg::codec::context::Context::from_parameters(audio_input.parameters())?;
     let mut decoder = context_decoder.decoder().audio()?;
+    let time_base = decoder.time_base();
+
+    // 跳转到指定时间, timestamp = 秒数 * 采样率
+    unsafe {
+        let result = av_seek_frame(
+            input_context.as_mut_ptr(),
+            stream_index.try_into().unwrap(),
+            (0.0 * decoder.rate() as f64) as i64,
+            AVSEEK_FLAG_BACKWARD,
+        );
+        log::debug!("av_seek_frame = {}", result);
+    }
+
     let channels = decoder.channels();
     let mut audio_frame = ffmpeg::frame::Audio::empty();
     let mut audio_convert_frame = ffmpeg::frame::Audio::empty();
@@ -96,8 +111,13 @@ fn init_ffmpeg(tx: Sender<Vec<AudioFormatT>>, rate: u32) -> Result<(), ffmpeg::E
                 //     rate,
                 //     audio_convert_frame.samples()
                 // );
+                let now_time = audio_frame
+                    .pts()
+                    .map(|pts| pts as f64 * f64::from(time_base));
+                log::debug!("{:?}", now_time);
                 let pcm_samples = audio_convert_frame.data(0).chunks(2).map(|buf| {
-                    (AudioFormatT::from_le_bytes(buf.try_into().unwrap()) as f32) as AudioFormatT
+                    (AudioFormatT::from_le_bytes(buf.try_into().unwrap()) as f32 * volume)
+                        as AudioFormatT
                 });
                 let convert_sample = SampleRateConverter::new(
                     pcm_samples,
