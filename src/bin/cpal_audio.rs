@@ -114,7 +114,7 @@ fn init_ffmpeg(tx: Sender<Vec<AudioFormatT>>, rate: u32) -> Result<(), ffmpeg::E
                 let now_time = audio_frame
                     .pts()
                     .map(|pts| pts as f64 * f64::from(time_base));
-                log::debug!("{:?}", now_time);
+                log::debug!("{:.2?}", now_time);
                 let pcm_samples = audio_convert_frame.data(0).chunks(2).map(|buf| {
                     (AudioFormatT::from_le_bytes(buf.try_into().unwrap()) as f32 * volume)
                         as AudioFormatT
