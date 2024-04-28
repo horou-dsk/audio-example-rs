@@ -76,10 +76,13 @@ fn init_ffmpeg(tx: Sender<Vec<AudioFormatT>>, rate: u32) -> Result<(), ffmpeg::E
         .best(media::Type::Audio)
         .ok_or(ffmpeg::Error::StreamNotFound)?;
     let stream_index = audio_input.index();
+    let duration = audio_input.duration();
     let context_decoder =
         ffmpeg::codec::context::Context::from_parameters(audio_input.parameters())?;
     let mut decoder = context_decoder.decoder().audio()?;
     let time_base = decoder.time_base();
+    let duration = duration as i32 * time_base.numerator() / time_base.denominator();
+    log::info!("时长：{}", format_duration(duration));
 
     // 跳转到指定时间, timestamp = 秒数 * 采样率
     unsafe {
@@ -130,4 +133,11 @@ fn init_ffmpeg(tx: Sender<Vec<AudioFormatT>>, rate: u32) -> Result<(), ffmpeg::E
         }
     }
     Ok(())
+}
+
+fn format_duration(duration: i32) -> String {
+    let seconds = duration % 60;
+    let minutes = (duration / 60) % 60;
+    let hours = duration / 3600;
+    format!("{hours:02}:{minutes:02}:{seconds:02}")
 }
