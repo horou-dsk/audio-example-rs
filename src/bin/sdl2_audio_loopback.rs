@@ -2,7 +2,9 @@ use std::time::Duration;
 
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use sdl2::{event::Event, keyboard::Keycode, pixels::Color, rect::Rect};
-use spectrum_analyzer::{samples_fft_to_spectrum, windows::hann_window, FrequencyLimit};
+use spectrum_analyzer::{
+    samples_fft_to_spectrum, scaling::divide_by_N_sqrt, windows::hann_window, FrequencyLimit,
+};
 
 fn map_range(value: f32, from_range: (f32, f32), to_range: (f32, f32)) -> f32 {
     let from_min = from_range.0;
@@ -56,7 +58,7 @@ fn main() -> Result<(), String> {
     //     .next()
     //     .unwrap()
     //     .with_max_sample_rate();
-    println!("{:#?}", config);
+    println!("{config:#?}");
     let rate = config.sample_rate();
     let stream = device
         .build_input_stream(
@@ -183,14 +185,29 @@ fn samples_to_fr(mut f32_samples: Vec<f32>, num_samples: usize, rate: u32) -> Ve
         // sampling rate
         rate,
         // optional frequency limit: e.g. only interested in frequencies 50 <= f <= 150?
-        FrequencyLimit::All,
+        FrequencyLimit::Min(20.0),
         // optional scale
-        None,
+        Some(&divide_by_N_sqrt),
     )
     .unwrap();
-    spectrum_hann_window
+    let mut freq_data: Vec<f32> = spectrum_hann_window
         .data()
         .iter()
-        .map(|(_, fr_val)| fr_val.val())
-        .collect()
+        .map(|(hz, fr_val)| {
+            let mut amplitude = fr_val.val() * 20.0;
+            let hz = hz.val();
+            // 频率加权，降低低频的影响
+            let frequency_weight = (hz / 10000.0).clamp(0.01, 1.0);
+            amplitude *= frequency_weight;
+
+            amplitude
+        })
+        .collect();
+    // 应用平滑滤波，减少突变
+    if freq_data.len() > 2 {
+        for i in 1..freq_data.len() - 1 {
+            freq_data[i] = (freq_data[i - 1] + freq_data[i] + freq_data[i + 1]) / 3.0;
+        }
+    }
+    freq_data
 }

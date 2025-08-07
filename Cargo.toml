@@ -8,8 +8,8 @@ anyhow = "1"
 chrono = "0.4"
 log = "0.4"
 spectrum-analyzer = "1.5"
-ffmpeg-next = { version = "7", features = ["default"] }
-ffmpeg-sys-next = { version = "7", features = ["default"] }
+ffmpeg-next = { version = "7.1" }
+ffmpeg-sys-next = { version = "7.1" }
 sdl2 = "0.36"
 cpal = "0.15"
 log-panics = { version = "2", features = ["with-backtrace"] }
