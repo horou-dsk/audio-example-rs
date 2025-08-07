@@ -53,13 +53,16 @@ fn main() -> Result<(), String> {
         .next()
         .unwrap()
         .with_max_sample_rate();
+    println!("{config:#?}");
     // let mut supported_configs_range = device.supported_output_configs().unwrap();
     // let config = supported_configs_range
     //     .next()
     //     .unwrap()
     //     .with_max_sample_rate();
-    println!("{config:#?}");
     let rate = config.sample_rate();
+    const BUFFER_SIZE: usize = 960 * 2;
+    let mut buffer_data = [0.0; BUFFER_SIZE];
+    let mut buffer_data_index = 0;
     let stream = device
         .build_input_stream(
             &config.config(),
@@ -70,7 +73,14 @@ fn main() -> Result<(), String> {
                 //     info.timestamp().callback
                 // );
                 // 采样数值大小跟播放音量有关系
-                tx.send(lr_fr(data, rate.0)).unwrap();
+                // println!("{:?}", data.len());
+                buffer_data[buffer_data_index..buffer_data_index + data.len()]
+                    .copy_from_slice(data);
+                buffer_data_index += data.len();
+                if buffer_data_index >= BUFFER_SIZE {
+                    buffer_data_index = 0;
+                    tx.send(lr_fr(&buffer_data, rate.0)).unwrap();
+                }
 
                 // println!("{:?}", &data[..20]);
             },
@@ -103,9 +113,10 @@ fn main() -> Result<(), String> {
         if let Ok((left_fr, right_fr)) = rx.try_recv() {
             if left_fr.len() >= channel_num && right_fr.len() >= channel_num {
                 old.copy_from_slice(&current);
-                new[..channel_num].copy_from_slice(
-                    &left_fr.into_iter().rev().collect::<Vec<f32>>()[..channel_num],
-                );
+                for (i, val) in left_fr.iter().take(channel_num).rev().enumerate() {
+                    new[i] = *val;
+                }
+                // new[..channel_num].copy_from_slice(&left_fr[..channel_num]);
                 new[channel_num..channel_num + channel_num]
                     .copy_from_slice(&right_fr[..channel_num]);
             }
@@ -118,7 +129,7 @@ fn main() -> Result<(), String> {
             current[i] += (new[i] - old[i]) / 10.0;
             let height = map_range(current[i], (0.0, 1.0), (0.0, 500.0)) as u32;
             let y = 600 - height;
-            let rect = Rect::new(i as i32 * rw as i32, y as i32, rw as u32, height);
+            let rect = Rect::new((i * rw) as i32, y as i32, rw as u32, height);
             canvas.fill_rect(rect)?;
             canvas.draw_rect(rect)?;
         }
@@ -185,7 +196,7 @@ fn samples_to_fr(mut f32_samples: Vec<f32>, num_samples: usize, rate: u32) -> Ve
         // sampling rate
         rate,
         // optional frequency limit: e.g. only interested in frequencies 50 <= f <= 150?
-        FrequencyLimit::Min(20.0),
+        FrequencyLimit::Min(250.0),
         // optional scale
         Some(&divide_by_N_sqrt),
     )
@@ -194,10 +205,10 @@ fn samples_to_fr(mut f32_samples: Vec<f32>, num_samples: usize, rate: u32) -> Ve
         .data()
         .iter()
         .map(|(hz, fr_val)| {
-            let mut amplitude = fr_val.val() * 20.0;
+            let mut amplitude = fr_val.val() * 50.0;
             let hz = hz.val();
             // 频率加权，降低低频的影响
-            let frequency_weight = (hz / 10000.0).clamp(0.01, 1.0);
+            let frequency_weight = (hz / 5000.0).clamp(0.05, 1.0);
             amplitude *= frequency_weight;
 
             amplitude
