@@ -111,15 +111,10 @@ fn main() -> Result<(), String> {
             }
         }
         if let Ok((left_fr, right_fr)) = rx.try_recv() {
-            if left_fr.len() >= channel_num && right_fr.len() >= channel_num {
-                old.copy_from_slice(&current);
-                for (i, val) in left_fr.iter().take(channel_num).rev().enumerate() {
-                    new[i] = *val;
-                }
-                // new[..channel_num].copy_from_slice(&left_fr[..channel_num]);
-                new[channel_num..channel_num + channel_num]
-                    .copy_from_slice(&right_fr[..channel_num]);
-            }
+            old.copy_from_slice(&current);
+            resample_linear(&left_fr, &mut new[..channel_num]);
+            new[..channel_num].reverse();
+            resample_linear(&right_fr, &mut new[channel_num..channel_num + channel_num]);
         }
         canvas.set_draw_color(Color::RGB(16, 29, 43));
         canvas.clear();
@@ -196,7 +191,7 @@ fn samples_to_fr(mut f32_samples: Vec<f32>, num_samples: usize, rate: u32) -> Ve
         // sampling rate
         rate,
         // optional frequency limit: e.g. only interested in frequencies 50 <= f <= 150?
-        FrequencyLimit::Min(250.0),
+        FrequencyLimit::Range(250.0, 20000.0),
         // optional scale
         Some(&divide_by_N_sqrt),
     )
@@ -221,4 +216,30 @@ fn samples_to_fr(mut f32_samples: Vec<f32>, num_samples: usize, rate: u32) -> Ve
         }
     }
     freq_data
+}
+
+fn resample_linear(input: &[f32], out: &mut [f32]) {
+    let out_len = out.len();
+    let input_len = input.len();
+    if out_len == 0 {
+        return;
+    }
+    if input_len == 0 {
+        return;
+    }
+    if input_len == 1 {
+        out[0] = input[0];
+        return;
+    }
+    if out.len() == 1 {
+        out[0] = input[0];
+        return;
+    }
+    for (i, out_val) in out.iter_mut().enumerate() {
+        let pos = i as f32 * (input_len - 1) as f32 / (out_len - 1) as f32; // 映射到原数组索引
+        let left = pos.floor() as usize;
+        let right = (left + 1).min(input_len - 1);
+        let t = pos - left as f32;
+        *out_val = input[left] * (1.0 - t) + input[right] * t;
+    }
 }
