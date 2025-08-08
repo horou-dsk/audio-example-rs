@@ -20,14 +20,23 @@ fn map_range(value: f32, from_range: (f32, f32), to_range: (f32, f32)) -> f32 {
 }
 
 fn main() -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        use windows::Win32::UI::HiDpi::SetProcessDpiAwarenessContext;
+        use windows::Win32::UI::HiDpi::DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2;
+        unsafe {
+            SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)
+                .expect("SetProcessDpiAwarenessContext failed");
+        }
+    }
     let sdl_context = sdl2::init()?;
     let video_subsystem = sdl_context.video()?;
 
-    let width = 1920;
-    let height = 600;
+    const WIDTH: u32 = 1920;
+    const HEIGHT: u32 = 600;
 
     let window = video_subsystem
-        .window("rust-sdl2 demo: Audio", width, height)
+        .window("rust-sdl2 demo: Audio", WIDTH, HEIGHT)
         .position_centered()
         .opengl()
         .build()
@@ -98,7 +107,7 @@ fn main() -> Result<(), String> {
 
     let line_num = 480;
     let channel_num = line_num / 2;
-    let rw = (width as usize) / line_num;
+    let rw = (WIDTH as usize) / line_num;
     'running: loop {
         for event in event_pump.poll_iter() {
             match event {
@@ -122,8 +131,8 @@ fn main() -> Result<(), String> {
         canvas.set_draw_color(Color::RGB(123, 0, 0));
         for i in 0..line_num {
             current[i] += (new[i] - old[i]) / 10.0;
-            let height = map_range(current[i], (0.0, 1.0), (0.0, 500.0)) as u32;
-            let y = 600 - height;
+            let height = map_range(current[i], (0.0, 1.0), (0.0, HEIGHT as f32)) as u32;
+            let y = HEIGHT - height;
             let rect = Rect::new((i * rw) as i32, y as i32, rw as u32, height);
             canvas.fill_rect(rect)?;
             canvas.draw_rect(rect)?;
@@ -200,7 +209,7 @@ fn samples_to_fr(mut f32_samples: Vec<f32>, num_samples: usize, rate: u32) -> Ve
         .data()
         .iter()
         .map(|(hz, fr_val)| {
-            let mut amplitude = fr_val.val() * 50.0;
+            let mut amplitude = fr_val.val() * 39.0;
             let hz = hz.val();
             // 频率加权，降低低频的影响
             let frequency_weight = (hz / 5000.0).clamp(0.05, 1.0);
